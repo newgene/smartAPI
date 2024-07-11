@@ -1,6 +1,7 @@
 import json
 import logging
 from copy import copy
+from typing import List
 
 import requests
 
@@ -16,6 +17,10 @@ class MetaKGParser:
     def get_non_TRAPI_metadatas(self, data, extra_data=None):
         parser = API(data)
         mkg = self.extract_metakgedges(parser.metadata["operations"], extra_data=extra_data)
+
+        bte_operations = self.extract_bte_operations(data)
+        mkg = self.include_bte_operations(mkg, bte_operations)
+
         no_nodes = len({x["subject"] for x in mkg} | {x["object"] for x in mkg})
         no_edges = len({x["predicate"] for x in mkg})
         logger.info("Done [%s nodes, %s edges]", no_nodes, no_edges)
@@ -32,7 +37,12 @@ class MetaKGParser:
             cnt_metakg_errors = sum([len(x) for x in self.metakg_errors.values()])
             logger.error(f"Found {cnt_metakg_errors} TRAPI metakg errors:\n {json.dumps(self.metakg_errors, indent=2)}")
 
-        return self.extract_metakgedges(ops, extra_data=extra_data)
+        mkg = self.extract_metakgedges(ops, extra_data=extra_data)
+
+        bte_operations = self.extract_bte_operations(data)
+        mkg = self.include_bte_operations(mkg, bte_operations)
+
+        return mkg
 
     def get_TRAPI_with_metakg_endpoint(self, data):
         metadatas = []
@@ -139,7 +149,7 @@ class MetaKGParser:
             return self.parse_trapi_metakg_endpoint(data, metadata)
         return []
 
-    def extract_metakgedges(self, ops, extra_data=None):
+    def extract_metakgedges(self, ops, extra_data=None, bte_operations=None):
         extra_data = extra_data or {}
 
         metakg_edges = []
@@ -178,5 +188,20 @@ class MetaKGParser:
                     del bte[attr]["tags"]
             if bte:
                 edge["api"]["bte"] = bte
+
             metakg_edges.append(edge)
         return metakg_edges
+
+    def extract_bte_operations(self, metadata: dict) -> dict:
+        bte_operations = (metadata.get("components") or {}).get("x-bte-kgs-operations") or {}
+
+        result = {}
+        for name, operation in bte_operations.items():
+            result[f"x-bte_key:{name}"] = operation
+
+        return result
+
+    def include_bte_operations(self, edges: List, bte_operations: dict) -> List:
+        for edge in edges:
+            edge["api"]["bte"].update(bte_operations)
+        return edges
