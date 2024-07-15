@@ -159,7 +159,9 @@ class MetaKGParser:
             _id = smartapi_data.get("id") or extra_data.get("id")
 
             edge = {
+                "subject_prefix": op["association"]["input_id"],
                 "subject": op["association"]["input_type"],
+                "object_prefix": op["association"]["output_id"],
                 "object": op["association"]["output_type"],
                 "predicate": op["association"]["predicate"],
                 "api": {
